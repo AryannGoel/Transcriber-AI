@@ -1,0 +1,10 @@
+{
+  "name": "Cloud Audio-to-Hinglish Transcriber",
+  "description": "Transcribes Hindi audio speech into WhatsApp-style romanized Hinglish using Groq Whisper API and local transliteration.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
