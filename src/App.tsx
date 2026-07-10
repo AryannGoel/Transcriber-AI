@@ -30,7 +30,7 @@ export default function App() {
     model: "whisper-large-v3",
     keepDevanagari: false,
     languageMode: "hinglish",
-    customPrompt: "Innova Crysta, Toyota, Service Center, budget friendly, interior, exterior, kilometre, lakh, Gurgaon, Delhi, EMI, finance, booking"
+    customPrompt: ""
   });
   const [customKey, setCustomKey] = useState<string>("");
   const [isTranscribing, setIsTranscribing] = useState<boolean>(false);

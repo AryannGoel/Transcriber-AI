@@ -72,13 +72,14 @@ def convert_and_compress_audio(input_path: Path) -> Path:
     cmd = [
         "ffmpeg", "-y",
         "-i", str(input_path),
+        "-vn",               # Disable video stream/extraction to prevent keyframe cuts
         "-ac", "1",          # Mono
         "-ar", "16000",      # 16kHz sample rate
     ]
     
-    # Use 32k bitrate for large files, otherwise 64k for optimal quality while maintaining safety
+    # Use 48k bitrate for large files, otherwise 64k for optimal quality while maintaining safety
     if is_large:
-        cmd.extend(["-b:a", "32k"])
+        cmd.extend(["-b:a", "48k"])
     else:
         cmd.extend(["-b:a", "64k"])
         
@@ -417,7 +418,7 @@ def main():
     )
     parser.add_argument(
         "--prompt",
-        default="Innova Crysta, Toyota, Service Center, model, budget friendly, interior, exterior, kilometre, lakh, Gurgaon, Delhi, EMI, finance, booking. सबसे पहले मैं आपको इस गाड़ी का interior और exterior दिखा देता हूँ। फिर मैं आपको पूरी गाड़ी के बारे में बताऊंगा। इसकी maintenance भी पूरी complete है।",
+        default='This is a transcription of mixed Hindi and English (Hinglish) spoken audio. Write Hindi words in Devanagari script and English words in Latin script. Do not translate Hindi to English. For example: "मैं आपको contact करूँगा, please wait a minute।", "यह process बहुत simple और smooth है।", "interior और exterior perfectly maintained है।", "इसका budget friendly option क्या है?"',
         help="Provide a transcription prompt to guide Whisper (e.g. vocabulary or formatting)."
     )
     
@@ -441,15 +442,10 @@ def main():
         print(f"\n[!] Error: File not found: {audio_path}\n")
         sys.exit(1)
         
-    # Check if we need to preprocess (either unsupported extension, video format, or size > 25MB)
-    file_size_bytes = os.path.getsize(audio_path)
-    limit_bytes = 25 * 1024 * 1024
-    
-    supported_extensions = {'.mp3', '.wav', '.m4a', '.webm', '.mpga', '.mpeg'}
-    file_ext = audio_path.suffix.lower()
-    
-    # Needs conversion if extension not directly accepted by Groq, OR if file is larger than 25MB
-    needs_conversion = (file_ext not in supported_extensions) or (file_size_bytes > limit_bytes)
+    # We always convert and normalize/compress audio to standard mono 16kHz MP3.
+    # This guarantees maximum compatibility, very fast upload, and prevents
+    # any missing text at the end of files due to network/container issues.
+    needs_conversion = True
     
     active_audio_path = audio_path
     is_temp = False
