@@ -167,7 +167,10 @@ app.get("/api/download-cli", (req, res) => {
 
 // Vite & Static Asset Handling
 async function startServer() {
-  if (process.env.NODE_ENV !== "production") {
+  const distExists = fs.existsSync(path.join(process.cwd(), "dist", "index.html"));
+  const isProd = process.env.NODE_ENV === "production" || process.env.RENDER === "true" || distExists;
+
+  if (!isProd) {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
