@@ -17,7 +17,10 @@ import {
   RefreshCw,
   HelpCircle,
   FileText,
-  Volume2
+  Volume2,
+  Plus,
+  X,
+  Tag
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { TranscriptionResult, TranscriberOptions } from "./types";
@@ -30,11 +33,18 @@ export default function App() {
     model: "whisper-large-v3",
     keepDevanagari: false,
     languageMode: "hinglish",
-    customPrompt: ""
+    customPrompt: "Innova Crysta, Toyota, Service Center, budget friendly, interior, exterior, kilometre, lakh, Gurgaon, Delhi, EMI, finance, booking"
   });
   const [customKey, setCustomKey] = useState<string>("");
   const [isTranscribing, setIsTranscribing] = useState<boolean>(false);
   const [result, setResult] = useState<TranscriptionResult | null>(null);
+  
+  // Spelling & Vocabulary Editor States
+  const [editorMode, setEditorMode] = useState<"tags" | "raw">("tags");
+  const [vocabTags, setVocabTags] = useState<string[]>([
+    "Innova Crysta", "Toyota", "Service Center", "budget friendly", "interior", "exterior", "kilometre", "lakh", "Gurgaon", "Delhi", "EMI", "finance", "booking"
+  ]);
+  const [tagInput, setTagInput] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   
   // Audio playback state
@@ -69,6 +79,13 @@ export default function App() {
       if (durationIntervalRef.current) clearInterval(durationIntervalRef.current);
     };
   }, []);
+
+  // Sync vocabTags with options.customPrompt when in tags mode
+  useEffect(() => {
+    if (editorMode === "tags") {
+      setOptions(prev => ({ ...prev, customPrompt: vocabTags.join(", ") }));
+    }
+  }, [vocabTags, editorMode]);
 
   // Format recording timer
   const formatTime = (seconds: number): string => {
@@ -239,6 +256,31 @@ export default function App() {
       setError(err.message || "An error occurred during transcription. Make sure your GROQ_API_KEY is configured.");
     } finally {
       setIsTranscribing(false);
+    }
+  };
+
+  // Tag helpers
+  const addTag = (text: string) => {
+    const trimmed = text.trim();
+    if (trimmed && !vocabTags.includes(trimmed)) {
+      setVocabTags(prev => [...prev, trimmed]);
+    }
+    setTagInput("");
+  };
+
+  const removeTag = (indexToRemove: number) => {
+    setVocabTags(prev => prev.filter((_, i) => i !== indexToRemove));
+  };
+
+  const loadPreset = (presetName: "cars" | "tech" | "medical" | "clear") => {
+    if (presetName === "cars") {
+      setVocabTags(["Innova Crysta", "Toyota", "Service Center", "budget friendly", "interior", "exterior", "kilometre", "lakh", "Gurgaon", "Delhi", "EMI", "finance", "booking"]);
+    } else if (presetName === "tech") {
+      setVocabTags(["SaaS", "API", "microservices", "database", "React", "Node.js", "deployment", "pipeline", "cloud", "serverless", "scaling"]);
+    } else if (presetName === "medical") {
+      setVocabTags(["clinic", "prescription", "dosage", "symptoms", "diagnosis", "therapy", "doctor", "health insurance"]);
+    } else {
+      setVocabTags([]);
     }
   };
 
@@ -560,18 +602,153 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Custom Whisper Prompt */}
-                  <div>
-                    <label className="block text-[10px] font-mono font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
-                      Whisper Hint Prompt (Optional)
-                    </label>
-                    <input
-                      type="text"
-                      value={options.customPrompt || ""}
-                      onChange={(e) => setOptions(prev => ({ ...prev, customPrompt: e.target.value }))}
-                      placeholder="e.g. Brands, spelling styles, punctuation"
-                      className="w-full bg-slate-950 border border-slate-850 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 focus:bg-slate-950 transition"
-                    />
+                  {/* Highly Improved Interactive Spelling & Vocabulary Editor */}
+                  <div className="space-y-3.5 bg-slate-950/40 p-4 border border-slate-850 rounded-xl">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <Tag className="w-3.5 h-3.5 text-indigo-400" />
+                        <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-300">
+                          Spelling & Domain Hints Editor
+                        </label>
+                      </div>
+                      
+                      {/* Mode selection switcher buttons */}
+                      <div className="flex bg-slate-950 p-0.5 rounded-lg border border-slate-800">
+                        <button
+                          type="button"
+                          onClick={() => setEditorMode("tags")}
+                          className={`px-2 py-1 text-[9px] font-mono font-bold rounded-md transition ${
+                            editorMode === "tags" 
+                              ? "bg-indigo-600 text-white shadow-sm" 
+                              : "text-slate-400 hover:text-slate-200"
+                          }`}
+                        >
+                          Smart Tags
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditorMode("raw")}
+                          className={`px-2 py-1 text-[9px] font-mono font-bold rounded-md transition ${
+                            editorMode === "raw" 
+                              ? "bg-indigo-600 text-white shadow-sm" 
+                              : "text-slate-400 hover:text-slate-200"
+                          }`}
+                        >
+                          Raw Prompt
+                        </button>
+                      </div>
+                    </div>
+
+                    <p className="text-[10px] text-slate-400 leading-normal">
+                      Guide Whisper's transcription engine to prevent spelling aberrations and domain drift (e.g., Maserati, budget-friendly).
+                    </p>
+
+                    {editorMode === "tags" ? (
+                      <div className="space-y-3">
+                        {/* Interactive Tag Area */}
+                        <div className="flex flex-wrap gap-1.5 max-h-[140px] overflow-y-auto p-2 bg-slate-950/60 rounded-lg border border-slate-900 scrollbar-thin">
+                          {vocabTags.length === 0 ? (
+                            <span className="text-[11px] text-slate-500 italic py-1 px-1">No keywords loaded. Type some below or load a preset!</span>
+                          ) : (
+                            vocabTags.map((tag, index) => (
+                              <motion.span
+                                key={`${tag}-${index}`}
+                                layoutId={`vocab-tag-${tag}-${index}`}
+                                className="inline-flex items-center gap-1 text-[11px] font-semibold bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 px-2 py-0.5 rounded-md hover:bg-indigo-500/15 transition group"
+                              >
+                                {tag}
+                                <button
+                                  type="button"
+                                  onClick={() => removeTag(index)}
+                                  className="text-indigo-400/50 hover:text-indigo-350 group-hover:scale-110 transition p-0.5 rounded"
+                                >
+                                  <X className="w-2.5 h-2.5" />
+                                </button>
+                              </motion.span>
+                            ))
+                          )}
+                        </div>
+
+                        {/* Tag entry input field */}
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={tagInput}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val.endsWith(",")) {
+                                addTag(val.slice(0, -1));
+                              } else {
+                                setTagInput(val);
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                addTag(tagInput);
+                              }
+                            }}
+                            placeholder="Add domain term (press Enter or comma)..."
+                            className="flex-1 bg-slate-950 border border-slate-850 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => addTag(tagInput)}
+                            className="bg-indigo-600 hover:bg-indigo-500 border border-indigo-500 text-white p-1.5 rounded-lg flex items-center justify-center transition"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        {/* Fast Presets Grid */}
+                        <div className="space-y-1">
+                          <span className="text-[9px] font-mono font-semibold text-slate-500 uppercase tracking-wider block">
+                            Quick-Load Vocabulary Presets
+                          </span>
+                          <div className="flex flex-wrap gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => loadPreset("cars")}
+                              className="px-2 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-md text-[10px] font-medium text-slate-300 flex items-center gap-1 transition"
+                            >
+                              🚗 Used Cars
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => loadPreset("tech")}
+                              className="px-2 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-md text-[10px] font-medium text-slate-300 flex items-center gap-1 transition"
+                            >
+                              💻 Tech SaaS
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => loadPreset("medical")}
+                              className="px-2 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-md text-[10px] font-medium text-slate-300 flex items-center gap-1 transition"
+                            >
+                              🏥 Medical
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => loadPreset("clear")}
+                              className="px-2 py-1 bg-slate-900/40 hover:bg-red-950/20 hover:border-red-900 border border-slate-800/80 rounded-md text-[10px] font-medium text-red-400 flex items-center gap-1 transition ml-auto"
+                            >
+                              🧹 Clear All
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      /* Classic Textarea raw prompt */
+                      <div>
+                        <textarea
+                          rows={4}
+                          value={options.customPrompt || ""}
+                          onChange={(e) => setOptions(prev => ({ ...prev, customPrompt: e.target.value }))}
+                          placeholder="Provide a comma-separated vocabulary list or contextual paragraph to bias spelling recognition..."
+                          className="w-full bg-slate-950 border border-slate-850 rounded-lg px-3 py-2 text-xs text-slate-200 font-sans focus:outline-none focus:border-indigo-500 focus:bg-slate-950 transition resize-none"
+                        />
+                      </div>
+                    )}
                   </div>
 
                   {/* Optional Custom API Key override field */}

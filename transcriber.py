@@ -174,7 +174,7 @@ def romanize_text(text: str) -> str:
 
 
 def transcribe_audio_groq(file_path: Path, model: str, language: str = None, prompt: str = None) -> str:
-    """Send audio file to Groq Whisper transcription API."""
+    """Send audio file to Groq Whisper transcription API with temperature=0."""
     groq_key = os.getenv("GROQ_API_KEY")
     if not groq_key:
         print("\n[!] Error: GROQ_API_KEY environment variable is not set.")
@@ -191,9 +191,10 @@ def transcribe_audio_groq(file_path: Path, model: str, language: str = None, pro
             kwargs = {
                 "file": (file_path.name, audio_file.read()),
                 "model": model,
-                "response_format": "verbose_json"
+                "response_format": "verbose_json",
+                "temperature": 0.0 # Set temperature=0 for deterministic, less-hallucinated output
             }
-            if language:
+            if language and language != "None" and language != "":
                 kwargs["language"] = language
             if prompt:
                 kwargs["prompt"] = prompt
@@ -210,6 +211,105 @@ def transcribe_audio_groq(file_path: Path, model: str, language: str = None, pro
         else:
             print(f"\n[!] Error communicating with Groq API: {e}")
         sys.exit(1)
+
+
+def split_audio_into_chunks(audio_path: Path, chunk_duration_sec: int = 600) -> list[Path]:
+    """
+    Split audio file into chunks of chunk_duration_sec seconds using ffmpeg.
+    Returns a list of Path objects pointing to the chunk files.
+    """
+    temp_dir = Path(tempfile.gettempdir())
+    prefix = f"chunk_{audio_path.stem}_{os.getpid()}"
+    output_pattern = temp_dir / f"{prefix}_%03d.mp3"
+    
+    cmd = [
+        "ffmpeg", "-y",
+        "-i", str(audio_path),
+        "-f", "segment",
+        "-segment_time", str(chunk_duration_sec),
+        "-c:a", "libmp3lame",
+        "-ar", "16000",
+        "-ac", "1",
+        "-b:a", "64k",
+        str(output_pattern)
+    ]
+    
+    print(f"[*] Splitting audio into {chunk_duration_sec}s chunks for stable transmission...")
+    try:
+        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        chunks = sorted(list(temp_dir.glob(f"{prefix}_*.mp3")))
+        print(f"[+] Successfully split audio into {len(chunks)} chunk(s).")
+        return chunks
+    except subprocess.CalledProcessError as e:
+        print(f"\n[-] Failed to split audio with libmp3lame: {e}")
+        # Try a simpler segment fallback copy command if libmp3lame is not available
+        cmd_copy = [
+            "ffmpeg", "-y",
+            "-i", str(audio_path),
+            "-f", "segment",
+            "-segment_time", str(chunk_duration_sec),
+            "-c", "copy",
+            str(output_pattern)
+        ]
+        try:
+            print("[*] Attempting fallback copy segment split...")
+            subprocess.run(cmd_copy, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+            chunks = sorted(list(temp_dir.glob(f"{prefix}_*.mp3")))
+            return chunks
+        except subprocess.CalledProcessError as e2:
+            print(f"\n[!] Fallback split also failed: {e2}\n")
+            sys.exit(1)
+
+
+def transcribe_audio_file(audio_path: Path, model: str, language: str = None, prompt: str = None) -> str:
+    """
+    Transcribe any size audio file. If the file is > 24MB, it splits it into chunks,
+    transcribes each chunk sequentially, passing the tail of the previous chunk's
+    transcription as the prompt for continuity, and returns the concatenated transcript.
+    """
+    file_size_bytes = os.path.getsize(audio_path)
+    limit_bytes = 24 * 1024 * 1024 # 24MB safety limit
+    
+    if file_size_bytes > limit_bytes:
+        print(f"[*] File size ({file_size_bytes / (1024*1024):.2f} MB) exceeds 24MB limit.")
+        chunks = split_audio_into_chunks(audio_path, chunk_duration_sec=600) # 10-minute chunks
+        if not chunks:
+            print("[!] Error: No chunks generated.")
+            sys.exit(1)
+            
+        transcripts = []
+        current_prompt = prompt or ""
+        
+        for i, chunk_path in enumerate(chunks):
+            print(f"[*] Transcribing chunk {i+1}/{len(chunks)} ({chunk_path.name})...")
+            chunk_text = transcribe_audio_groq(
+                chunk_path,
+                model,
+                language=language,
+                prompt=current_prompt
+            )
+            transcripts.append(chunk_text)
+            
+            # Clean up the temporary chunk file
+            try:
+                os.unlink(chunk_path)
+            except Exception as e:
+                print(f"[-] Warning: Failed to delete temporary chunk {chunk_path}: {e}")
+                
+            # Update the prompt for the next chunk with the tail of the current chunk text.
+            # Take the last 60 words for continuity.
+            words = chunk_text.split()
+            tail_words = words[-60:] if len(words) > 60 else words
+            tail_text = " ".join(tail_words)
+            
+            if prompt:
+                current_prompt = f"{prompt} Continuing from: {tail_text}"
+            else:
+                current_prompt = f"Continuing from: {tail_text}"
+                
+        return "\n".join(transcripts)
+    else:
+        return transcribe_audio_groq(audio_path, model, language=language, prompt=prompt)
 
 
 def run_live_microphone(model: str, keep_devanagari: bool, language: str = None, prompt: str = None):
@@ -312,12 +412,12 @@ def main():
     )
     parser.add_argument(
         "--language",
-        default=None,
-        help="Specify transcription language code (e.g. 'hi', 'en'). Leave empty to auto-detect."
+        default="hi",
+        help="Specify transcription language code (e.g. 'hi', 'en'). Defaults to 'hi' to lock language and prevent drift."
     )
     parser.add_argument(
         "--prompt",
-        default=None,
+        default="Innova Crysta, Toyota, Service Center, model, budget friendly, interior, exterior, kilometre, lakh, Gurgaon, Delhi, EMI, finance, booking. सबसे पहले मैं आपको इस गाड़ी का interior और exterior दिखा देता हूँ। फिर मैं आपको पूरी गाड़ी के बारे में बताऊंगा। इसकी maintenance भी पूरी complete है।",
         help="Provide a transcription prompt to guide Whisper (e.g. vocabulary or formatting)."
     )
     
@@ -359,8 +459,8 @@ def main():
         is_temp = True
         
     try:
-        # Transcribe
-        raw_hindi = transcribe_audio_groq(
+        # Transcribe (supports chunking for files > 24MB)
+        raw_hindi = transcribe_audio_file(
             active_audio_path, 
             args.model, 
             language=args.language, 
@@ -384,7 +484,7 @@ def main():
         with open(txt_output_path, "w", encoding="utf-8") as out_file:
             out_file.write(final_output)
             
-        print(f"\n[+] Success! Transcript saved to: {txt_output_path}\n")
+        print(f"\n[+] Success! Transcript saved to: {txt_output_path}\n", file=sys.stderr)
         
     finally:
         # Cleanup temporary compressed files

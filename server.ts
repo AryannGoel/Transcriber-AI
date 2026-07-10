@@ -70,12 +70,17 @@ app.post("/api/transcribe", upload.single("file"), (req, res) => {
     whisperLanguage = "en";
     whisperPrompt = "This is a transcription of pure English spoken audio. Write everything in English.";
   } else {
-    // Hinglish Mode: Let Whisper auto-detect, guide it to separate scripts
-    whisperPrompt = "This is a transcription of mixed Hindi and English (Hinglish) spoken audio. Write English words in English (Latin script) and Hindi words in Devanagari (Hindi) script. Do not translate. Example: 'main aapko explain karta hoon', 'please listen carefully', 'ye product bahut accha hai'.";
+    // Hinglish Mode: Explicitly lock language to "hi" to prevent language drift/hallucination,
+    // and provide a prompt in Devanagari with embedded English terms so Whisper knows to output
+    // Devanagari for Hindi and Latin for English terms, without any translation.
+    whisperLanguage = "hi";
+    whisperPrompt = "Innova Crysta, Toyota, Service Center, model, budget friendly, interior, exterior, kilometre, lakh, Gurgaon, Delhi, EMI, finance, booking. सबसे पहले मैं आपको इस गाड़ी का interior और exterior दिखा देता हूँ। फिर मैं आपको पूरी गाड़ी के बारे में बताऊंगा। इसकी maintenance भी पूरी complete है।";
   }
 
+  const domainHint = "Innova Crysta, Toyota, Service Center, model, budget friendly, interior, exterior, kilometre, lakh, Gurgaon, Delhi, EMI, finance, booking. सबसे पहले मैं आपको इस गाड़ी का interior और exterior दिखा देता हूँ।";
+
   if (customPrompt && customPrompt.trim()) {
-    whisperPrompt = `${whisperPrompt} Context hints: ${customPrompt.trim()}`;
+    whisperPrompt = `${whisperPrompt} Context: ${customPrompt.trim()}`;
   }
 
   // Construct command
