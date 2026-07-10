@@ -7,4 +7,6 @@ export interface TranscriptionResult {
 export interface TranscriberOptions {
   model: string;
   keepDevanagari: boolean;
+  languageMode: "hinglish" | "hindi" | "english";
+  customPrompt?: string;
 }

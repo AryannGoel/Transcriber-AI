@@ -173,7 +173,7 @@ def romanize_text(text: str) -> str:
     return "".join(transliterated_segments)
 
 
-def transcribe_audio_groq(file_path: Path, model: str) -> str:
+def transcribe_audio_groq(file_path: Path, model: str, language: str = None, prompt: str = None) -> str:
     """Send audio file to Groq Whisper transcription API."""
     groq_key = os.getenv("GROQ_API_KEY")
     if not groq_key:
@@ -187,13 +187,18 @@ def transcribe_audio_groq(file_path: Path, model: str) -> str:
     print(f"[*] Sending audio to Groq Whisper endpoint using model: '{model}'...")
     try:
         with open(file_path, "rb") as audio_file:
-            # Enforce transcription endpoint, transcribe in Hindi ('hi') to avoid translating
-            response = client.audio.transcriptions.create(
-                file=(file_path.name, audio_file.read()),
-                model=model,
-                language="hi",  # Request Hindi output so it transcribes Hindi instead of translating
-                response_format="verbose_json"
-            )
+            # Prepare optional parameters
+            kwargs = {
+                "file": (file_path.name, audio_file.read()),
+                "model": model,
+                "response_format": "verbose_json"
+            }
+            if language:
+                kwargs["language"] = language
+            if prompt:
+                kwargs["prompt"] = prompt
+                
+            response = client.audio.transcriptions.create(**kwargs)
         return response.text
     except Exception as e:
         # Standardize error handling for 401 Unauthorized and 429 Rate Limits
@@ -207,7 +212,7 @@ def transcribe_audio_groq(file_path: Path, model: str) -> str:
         sys.exit(1)
 
 
-def run_live_microphone(model: str, keep_devanagari: bool):
+def run_live_microphone(model: str, keep_devanagari: bool, language: str = None, prompt: str = None):
     """
     Live microphone recording loop. Records short audio segments,
     transcribes them using Groq, and prints romanized Hinglish in real time.
@@ -257,7 +262,7 @@ def run_live_microphone(model: str, keep_devanagari: bool):
             
             try:
                 # Transcribe chunk
-                raw_text = transcribe_audio_groq(temp_path, model)
+                raw_text = transcribe_audio_groq(temp_path, model, language=language, prompt=prompt)
                 
                 # Filter out blank or very silent transcriptions
                 if raw_text.strip() and not re.match(r'^(Subtitles|Thank you|you|bye)\.?$', raw_text.strip(), re.I):
@@ -305,6 +310,16 @@ def main():
         action="store_true",
         help="Launch interactive live microphone transcription mode"
     )
+    parser.add_argument(
+        "--language",
+        default=None,
+        help="Specify transcription language code (e.g. 'hi', 'en'). Leave empty to auto-detect."
+    )
+    parser.add_argument(
+        "--prompt",
+        default=None,
+        help="Provide a transcription prompt to guide Whisper (e.g. vocabulary or formatting)."
+    )
     
     args = parser.parse_args()
     
@@ -313,7 +328,7 @@ def main():
     
     # 2. Check flags and start correct mode
     if args.live:
-        run_live_microphone(args.model, args.keep_devanagari)
+        run_live_microphone(args.model, args.keep_devanagari, language=args.language, prompt=args.prompt)
         return
         
     if not args.audio_file:
@@ -345,7 +360,12 @@ def main():
         
     try:
         # Transcribe
-        raw_hindi = transcribe_audio_groq(active_audio_path, args.model)
+        raw_hindi = transcribe_audio_groq(
+            active_audio_path, 
+            args.model, 
+            language=args.language, 
+            prompt=args.prompt
+        )
         
         print("\n--- RAW TRANSCRIPTION (Devanagari) ---")
         print(raw_hindi)

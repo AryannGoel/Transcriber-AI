@@ -45,6 +45,8 @@ app.post("/api/transcribe", upload.single("file"), (req, res) => {
   const audioFilePath = req.file.path;
   const model = req.body.model || "whisper-large-v3";
   const keepDevanagari = req.body.keepDevanagari === "true";
+  const languageMode = req.body.languageMode || "hinglish";
+  const customPrompt = req.body.customPrompt || "";
   
   // Accept custom Groq key from client if configured, otherwise fallback to server environment
   const groqKey = req.body.groqApiKey || process.env.GROQ_API_KEY;
@@ -57,10 +59,36 @@ app.post("/api/transcribe", upload.single("file"), (req, res) => {
     });
   }
 
+  // Setup prompt and language based on mode
+  let whisperLanguage = "";
+  let whisperPrompt = "";
+
+  if (languageMode === "hindi") {
+    whisperLanguage = "hi";
+    whisperPrompt = "यह बातचीत हिंदी में है। कृपया सभी शब्दों को देवनागरी लिपि में लिखें।";
+  } else if (languageMode === "english") {
+    whisperLanguage = "en";
+    whisperPrompt = "This is a transcription of pure English spoken audio. Write everything in English.";
+  } else {
+    // Hinglish Mode: Let Whisper auto-detect, guide it to separate scripts
+    whisperPrompt = "This is a transcription of mixed Hindi and English (Hinglish) spoken audio. Write English words in English (Latin script) and Hindi words in Devanagari (Hindi) script. Do not translate. Example: 'main aapko explain karta hoon', 'please listen carefully', 'ye product bahut accha hai'.";
+  }
+
+  if (customPrompt && customPrompt.trim()) {
+    whisperPrompt = `${whisperPrompt} Context hints: ${customPrompt.trim()}`;
+  }
+
   // Construct command
   let cmd = `python3 transcriber.py "${audioFilePath}" --model "${model}"`;
   if (keepDevanagari) {
     cmd += " --keep-devanagari";
+  }
+  if (whisperLanguage) {
+    cmd += ` --language "${whisperLanguage}"`;
+  }
+  if (whisperPrompt) {
+    const escapedPrompt = whisperPrompt.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+    cmd += ` --prompt "${escapedPrompt}"`;
   }
 
   console.log(`[Server] Executing: ${cmd}`);

@@ -28,7 +28,9 @@ export default function App() {
   const [dragActive, setDragActive] = useState<boolean>(false);
   const [options, setOptions] = useState<TranscriberOptions>({
     model: "whisper-large-v3",
-    keepDevanagari: false
+    keepDevanagari: false,
+    languageMode: "hinglish",
+    customPrompt: ""
   });
   const [customKey, setCustomKey] = useState<string>("");
   const [isTranscribing, setIsTranscribing] = useState<boolean>(false);
@@ -201,6 +203,10 @@ export default function App() {
     formData.append("file", file);
     formData.append("model", options.model);
     formData.append("keepDevanagari", options.keepDevanagari ? "true" : "false");
+    formData.append("languageMode", options.languageMode);
+    if (options.customPrompt) {
+      formData.append("customPrompt", options.customPrompt);
+    }
     
     if (customKey.trim()) {
       formData.append("groqApiKey", customKey.trim());
@@ -473,6 +479,29 @@ export default function App() {
                   </p>
                 </div>
 
+                {/* Speech Language Mode */}
+                <div>
+                  <label className="block text-xs font-mono font-semibold uppercase tracking-wider text-slate-400 mb-2">
+                    Speech Language Mode
+                  </label>
+                  <select
+                    value={options.languageMode}
+                    onChange={(e) => setOptions(prev => ({ ...prev, languageMode: e.target.value as any }))}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-teal-500 transition"
+                  >
+                    <option value="hinglish">Hinglish / Mixed (Hindi + English)</option>
+                    <option value="hindi">Pure Hindi (Forces Devanagari)</option>
+                    <option value="english">Pure English (Forces Latin)</option>
+                  </select>
+                  <p className="mt-1.5 text-[11px] text-slate-500 leading-normal">
+                    {options.languageMode === "hinglish" 
+                      ? "Mixed audio. Preserves spelling of English words (e.g. 'explain') and transliterates Devanagari Hindi."
+                      : options.languageMode === "hindi"
+                        ? "Forces Whisper to output everything in Devanagari script."
+                        : "Forces Whisper to output pure English."}
+                  </p>
+                </div>
+
                 {/* Keep Devanagari Script Toggle */}
                 <div>
                   <label className="block text-xs font-mono font-semibold uppercase tracking-wider text-slate-400 mb-2.5">
@@ -484,14 +513,32 @@ export default function App() {
                       id="keep-devanagari-checkbox"
                       checked={options.keepDevanagari}
                       onChange={(e) => setOptions(prev => ({ ...prev, keepDevanagari: e.target.checked }))}
-                      className="w-4 h-4 accent-teal-500 rounded border-slate-800 text-teal-500 focus:ring-teal-500 bg-slate-950"
+                      disabled={options.languageMode === "english"}
+                      className="w-4 h-4 accent-teal-500 rounded border-slate-800 text-teal-500 focus:ring-teal-500 bg-slate-950 disabled:opacity-50"
                     />
-                    <label htmlFor="keep-devanagari-checkbox" className="text-sm font-medium text-slate-200 cursor-pointer select-none">
+                    <label htmlFor="keep-devanagari-checkbox" className={`text-sm font-medium text-slate-200 cursor-pointer select-none ${options.languageMode === "english" ? "opacity-50 cursor-not-allowed" : ""}`}>
                       Skip Romanization (Raw Hindi)
                     </label>
                   </div>
                   <p className="mt-1.5 text-[11px] text-slate-500 leading-normal">
                     If selected, output remains in standard Hindi Devanagari script (e.g. "नमस्ते").
+                  </p>
+                </div>
+
+                {/* Custom Whisper Prompt */}
+                <div>
+                  <label className="block text-xs font-mono font-semibold uppercase tracking-wider text-slate-400 mb-2">
+                    Whisper Prompt / Hints (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={options.customPrompt || ""}
+                    onChange={(e) => setOptions(prev => ({ ...prev, customPrompt: e.target.value }))}
+                    placeholder="e.g. Product names, jargon, punctuation guides"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-teal-500 transition"
+                  />
+                  <p className="mt-1.5 text-[11px] text-slate-500 leading-normal">
+                    Helps Whisper with spelling, rare words, names, or style.
                   </p>
                 </div>
               </div>
